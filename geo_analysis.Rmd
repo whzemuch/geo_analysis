@@ -11,6 +11,10 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r library and import data}
 library(GEOquery)
 library(limma) 
+library(tidyverse)
+library(dplyr)
+library(tibble)
+library(pheatmap)
 
 
 
@@ -67,7 +71,7 @@ if(LogC) {
 ```{r}
 "illuminaHumanv2.db"
 
-安装R包并加载
+
 
 # if(length(getOption("BioC_mirror"))==0) options(BioC_mirror="https://mirrors.ustc.edu.cn/bioc/")
 if(!require("illuminaHumanv2.db")) BiocManager::install("illuminaHumanv2.db",update = F,ask = F)
@@ -85,6 +89,51 @@ SYMBOL <- annotate::lookUp(probeset, platformDB, "SYMBOL")
 
 symbol <- as.vector(unlist(SYMBOL))
 probe2symbol <- data.frame(probeset, symbol, stringsAsFactors = F)
+
+
+```
+
+```{r}
+
+exprSet1 <- exprSet %>%  
+    rownames_to_column(var="probeset") %>% 
+    inner_join(probe2symbol, by="probeset") %>% 
+    select(-probeset) %>% 
+    select(symbol, everything()) %>% 
+    mutate(rowMean = rowMeans(.[grep("GSM", names(.))])) %>% 
+    filter(symbol !="NA") %>% 
+    arrange(desc(rowMean)) %>% 
+    distinct(symbol, .keep_all = T) %>% 
+    select(-rowMean) %>% 
+    column_to_rownames(var = "symbol")
+
+pairinfo <-  factor(rep(1:18, 2))
+design <- model.matrix(~ pairinfo + group_list)
+fit <- lmFit(exprSet1, design)
+fit <- eBayes(fit)
+allDiff_pair=topTable(fit,adjust='BH',coef="group_listafter",number=Inf,p.value=0.05)
+    
+  
+```
+allDiff_pair=topTable(fit,adjust='BH',coef="group_listafter",number=Inf,p.value=0.05,lfc =0.5)
+
+
+heat_data <- exprSet1[rownames(allDiff_pair),]
+annotation_col <- data.frame(group_list)
+rownames(annotation_col) <- colnames(heatdata)
+
+pheatmap(heat_data,
+         cluster_rows =TRUE,
+         cluster_cols = TRUE,
+         annotation_col = annotation_col,
+         annotation_legend = TRUE,
+         show_rownames = F,
+         show_colnames = F,
+         scale = "row",
+         color = colorRampPalette(c("blue", "white", "red"))(100))
+
+
+```{r}
 
 
 ```
